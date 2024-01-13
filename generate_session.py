@@ -18,4 +18,5 @@ async def main():
     print(f"\n\nPath to you session file is:\n{path}\n\n")
     print("Please add this path to the session_path variable in creds.py!!")
 
+
 asyncio.run(main())

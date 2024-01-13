@@ -26,7 +26,7 @@ async def get_chats():
 
     chats = []
     async for dialog in client.iter_dialogs():
-        chats.append(dialog.id)
+        chats.append(dialog.name)
     chats.sort()
     return chats
 
@@ -43,8 +43,8 @@ async def main():
 
     layout = [
         [
-                    create_checkbox_frame("Chats", chats, "chat", select_all=False),
-                    create_text_frame("Files", files),
+            create_checkbox_frame("Chats", chats, "chat", select_all=False),
+            create_text_frame("Files", files),
         ],
     ]
 
@@ -58,7 +58,8 @@ async def main():
                 size=(10, 10),
             ),
             sg.Push(),
-        ])
+        ]
+    )
     layout.append(
         [
             sg.Push(),
@@ -68,7 +69,9 @@ async def main():
         ]
     )
 
-    window = sg.Window("Upload to channel...", layout=layout, resizable=True, size=(1280, 720))
+    window = sg.Window(
+        "Upload to channel...", layout=layout, resizable=True, size=(1280, 720)
+    )
 
     while True:
         event, values = window.read()
@@ -99,7 +102,8 @@ async def upload_handler(client, window, chat, file, force_document):
     await client.send_file(
         chat,
         file,
-        caption=get_filename(file, trim_ext=True),
+        # caption=get_filename(file, trim_ext=True),
+        # caption=get_filename(file, trim_ext=True),
         force_document=force_document,
         progress_callback=report_status,
         silent=True,
@@ -113,10 +117,19 @@ async def start_uploading(window, files_to_upload, force_document=False):
         api_hash,
     )
     await client.start()
-    tasks = []
-    for chat, file in files_to_upload:
-        task = upload_handler(client, window, chat, file, force_document)
-        tasks.append(task)
+    # tasks = []
+
+    semaphore = asyncio.Semaphore(12)
+
+    async def upload_with_semaphore(chat, file):
+        async with semaphore:
+            await upload_handler(client, window, chat, file, force_document)
+
+    tasks = [upload_with_semaphore(chat, file) for chat, file in files_to_upload]
+
+    # for chat, file in files_to_upload:
+    #     task = upload_handler(client, window, chat, file, force_document)
+    #     tasks.append(task)
     await asyncio.gather(*tasks)
     await client.disconnect()
 
@@ -124,9 +137,21 @@ async def start_uploading(window, files_to_upload, force_document=False):
 def create_async_tasks(window, files_to_upload, force_document=False):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
+    # semaphore = asyncio.Semaphore(8)
+
+    # async def upload_with_semaphore(chat, file):
+    #     async with semaphore:
+    #         await upload_handler(client, window, chat, file, force_document)
+    #
+    # tasks = [upload_with_semaphore(chat, file) for chat, file in files_to_upload]
+    #
+    # loop.run_until_complete(asyncio.gather(*tasks))
+
     loop.run_until_complete(start_uploading(window, files_to_upload, force_document))
     print("loop finished")
     window.write_event_value("exit_app", "1")
+
 
 async def start_upload(chats, files, force_document=False):
     layout = [
@@ -165,7 +190,7 @@ async def start_upload(chats, files, force_document=False):
                 vertical_scroll_only=True,
                 expand_x=True,
                 expand_y=True,
-                size=(800, 600)
+                size=(800, 600),
             )
         ]
     ]
