@@ -1,6 +1,9 @@
-import PySimpleGUI as sg
-from config import font_size
 import os
+
+import PySimpleGUI as sg
+
+from config import font
+from ui import Checkbox, Column, Text
 
 
 def get_filename(path, trim_ext=False):
@@ -19,7 +22,6 @@ def get_key(string, prefix="", suffix=""):
 
 
 def create_checkbox_frame(
-    frame_name,
     items,
     key_prefix,
     select_all=True,
@@ -28,41 +30,24 @@ def create_checkbox_frame(
     if select_all:
         layout.append(
             [
-                sg.Checkbox(
+                Checkbox(
                     "Select all",
-                    key=get_key("select_all", key_prefix),
-                    enable_events=True,
-                    expand_x=True,
-                    expand_y=True,
+                    get_key("select_all", key_prefix),
                 )
             ]
         )
     for item in items:
-        element = [sg.Checkbox(item, key=get_key(item, key_prefix), font=font_size)]
+        element = [sg.Checkbox(item, key=get_key(item, key_prefix), font=font)]
         layout.append(element)
-    return sg.Column(
-        layout,
-        scrollable=True,
-        vertical_scroll_only=True,
-        expand_y=True,
-        expand_x=True,
-        size=(300, 300),
-    )
+    return Column(layout)
 
 
 def create_text_frame(
-    frame_name,
     items,
 ):
     layout = []
     for item in items:
-        element = [sg.Text(item.replace("/home/neel", "~"), font=font_size)]
+        item_name = item.replace("/home/neel", "~")
+        element = [Text(item_name)]
         layout.append(element)
-    return sg.Column(
-        layout,
-        scrollable=True,
-        vertical_scroll_only=True,
-        expand_y=True,
-        expand_x=True,
-        size=(300, 300),
-    )
+    return Column(layout)

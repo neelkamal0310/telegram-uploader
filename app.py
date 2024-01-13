@@ -6,8 +6,9 @@ import threading
 import PySimpleGUI as sg
 from telethon import TelegramClient
 
-from config import font_size
+from config import font
 from creds import api_hash, api_id, session_path
+from ui import Button, Checkbox, Spacer, Window
 from utils import create_checkbox_frame, create_text_frame, get_filename
 
 sg.theme("DarkAmber")
@@ -43,35 +44,39 @@ async def main():
 
     layout = [
         [
-            create_checkbox_frame("Chats", chats, "chat", select_all=False),
-            create_text_frame("Files", files),
+            create_checkbox_frame(chats, "chat", select_all=False),
+            create_text_frame(files),
+        ],
+        [
+            Spacer(),
+            Checkbox("Send as document", "send_as_document"),
+            Spacer(),
+        ],
+        [
+            Spacer(),
+            Button("Start Upload", "upload"),
+            Button("Cancel", "cancel"),
+            Spacer(),
         ],
     ]
 
-    layout.append(
-        [
-            sg.Push(),
-            sg.Checkbox(
-                "Send as document",
-                key="send_as_document",
-                font=font_size,
-                size=(10, 10),
-            ),
-            sg.Push(),
-        ]
-    )
-    layout.append(
-        [
-            sg.Push(),
-            sg.Button("Start Upload", key="upload", font=font_size),
-            sg.Button("Cancel", key="cancel", font=font_size),
-            sg.Push(),
-        ]
-    )
+    # layout.append(
+    #     [
+    #         Spacer(),
+    #         Checkbox( "Send as document", "send_as_document"),
+    #         Spacer(),
+    #     ]
+    # )
+    # layout.append(
+    #     [
+    #         Spacer(),
+    #         Button("Start Upload", "upload"),
+    #         Button("Cancel", "cancel"),
+    #         Spacer(),
+    #     ]
+    # )
 
-    window = sg.Window(
-        "Upload to channel...", layout=layout, resizable=True, size=(1280, 720)
-    )
+    window = Window("Upload to channel...", layout)
 
     while True:
         event, values = window.read()
@@ -156,8 +161,8 @@ def create_async_tasks(window, files_to_upload, force_document=False):
 async def start_upload(chats, files, force_document=False):
     layout = [
         [
-            sg.Text("Filename", font=font_size, size=50),
-            sg.Text("Channel/Chat", font=font_size),
+            sg.Text("Filename", font=font, size=50),
+            sg.Text("Channel/Chat", font=font),
         ]
     ]
 
@@ -168,13 +173,13 @@ async def start_upload(chats, files, force_document=False):
             layout.extend(
                 [
                     [
-                        sg.Text(get_filename(file), font=font_size),
+                        sg.Text(get_filename(file), font=font),
                         sg.Text("->"),
-                        sg.Text(chat, font=font_size),
+                        sg.Text(chat, font=font),
                     ],
                     [
                         sg.ProgressBar(100, key=key, size=(50, 5), expand_x=True),
-                        sg.Text(f"----", key=f"{key}:text", font=font_size),
+                        sg.Text(f"----", key=f"{key}:text", font=font),
                     ],
                     [
                         sg.T("                                    "),
