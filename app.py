@@ -84,6 +84,7 @@ async def upload_handler(client, window, chat, file, force_document):
     )
 
 
+@threaded
 async def start_uploading(window, files_to_upload, force_document=False):
     client = TelegramClient(
         session_path,
@@ -91,7 +92,6 @@ async def start_uploading(window, files_to_upload, force_document=False):
         api_hash,
     )
     await client.start()
-    # tasks = []
 
     semaphore = asyncio.Semaphore(12)
 
@@ -106,13 +106,6 @@ async def start_uploading(window, files_to_upload, force_document=False):
     #     tasks.append(task)
     await asyncio.gather(*tasks)
     await client.disconnect()
-
-
-def create_async_tasks(window, files_to_upload, force_document=False):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    loop.run_until_complete(start_uploading(window, files_to_upload, force_document))
     window.write_event_value("exit_app", "1")
 
 
@@ -149,21 +142,19 @@ async def start_upload(chats, files, force_document=False):
     # window.bind("<Configure>", "Event")
     await client.disconnect()
 
-    upload_thread = create_thread(
-        create_async_tasks, window, files_to_upload, force_document
-    )
-    upload_thread.start()
+    start_uploading(window, files_to_upload, force_document)
 
     while True:
         event, values = window.read()
         if event and event.endswith("progress"):
             window[event].update(values[event])
             window[f"{event}:text"].update(f"{int(values[event])}%")
-        if event == "exit_app":
-            upload_thread.join()
-            break
-        if event == sg.WIN_CLOSED or event == "Cancel" or event is None:
-            upload_thread.join()
+        if (
+            event == "exit_app"
+            or event == sg.WIN_CLOSED
+            or event == "Cancel"
+            or event is None
+        ):
             break
 
 

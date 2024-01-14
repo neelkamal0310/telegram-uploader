@@ -33,12 +33,10 @@ def create_thread(func, *args, **kwargs):
 
 def threaded(func):
     # A decorator that runs the function as threaded. It also creates a eventloop for asyncio operations
-    def wrapper(func, *args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
+    def wrapper(*args, **kwargs):
         def run_thread():
-            # result = func(*args, **kwargs)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             loop.run_until_complete(func(*args, **kwargs))
 
         thread = threading.Thread(target=run_thread, daemon=True)
