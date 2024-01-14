@@ -9,9 +9,8 @@ from telethon import TelegramClient
 from config import font
 from creds import api_hash, api_id, session_path
 from ui import Button, Checkbox, Spacer, Window
-from utils import create_checkbox_frame, create_text_frame, get_filename
-
-sg.theme("DarkAmber")
+from ui.base import CheckboxList, Column, Text, TextList, VCenter, VTop
+from utils import create_thread, get_chats, get_filename, threaded
 
 client = TelegramClient(
     session_path,
@@ -20,20 +19,8 @@ client = TelegramClient(
 )
 
 
-async def get_chats():
-    """
-    Return list of chats available to the client.
-    """
-
-    chats = []
-    async for dialog in client.iter_dialogs():
-        chats.append(dialog.name)
-    chats.sort()
-    return chats
-
-
 async def main():
-    chats = await get_chats()
+    chats = await get_chats(client)
     files = sys.argv[1:]
     selected_files = []
     for file in files:
@@ -44,8 +31,8 @@ async def main():
 
     layout = [
         [
-            create_checkbox_frame(chats, "chat", select_all=False),
-            create_text_frame(files),
+            CheckboxList(chats, "chat"),
+            TextList(files, "file"),
         ],
         [
             Spacer(),
@@ -60,40 +47,22 @@ async def main():
         ],
     ]
 
-    # layout.append(
-    #     [
-    #         Spacer(),
-    #         Checkbox( "Send as document", "send_as_document"),
-    #         Spacer(),
-    #     ]
-    # )
-    # layout.append(
-    #     [
-    #         Spacer(),
-    #         Button("Start Upload", "upload"),
-    #         Button("Cancel", "cancel"),
-    #         Spacer(),
-    #     ]
-    # )
-
-    window = Window("Upload to channel...", layout)
+    window = Window("Telegram Uploader - Upload to channel", layout)
+    upload_to_chats = None
+    as_document = None
 
     while True:
         event, values = window.read()
-        if event and event.endswith("select_all"):
-            category = event.split(":")[0]
-            for key in values:
-                if key.startswith(category):
-                    window[key].update(values[event])
         if event == "upload":
             upload_to_chats = [chat for chat in chats if values[f"chat:{chat}"]]
             as_document = values["send_as_document"]
             window.close()
             break
-        if (
-            event == sg.WIN_CLOSED or event == "cancel"
-        ):  # if user closes window or clicks cancel
+        if event == sg.WIN_CLOSED or event == "cancel":
             break
+
+    if upload_to_chats is None or as_document is None:
+        return
 
     await start_upload(upload_to_chats, files, as_document)
 
@@ -143,26 +112,15 @@ def create_async_tasks(window, files_to_upload, force_document=False):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # semaphore = asyncio.Semaphore(8)
-
-    # async def upload_with_semaphore(chat, file):
-    #     async with semaphore:
-    #         await upload_handler(client, window, chat, file, force_document)
-    #
-    # tasks = [upload_with_semaphore(chat, file) for chat, file in files_to_upload]
-    #
-    # loop.run_until_complete(asyncio.gather(*tasks))
-
     loop.run_until_complete(start_uploading(window, files_to_upload, force_document))
-    print("loop finished")
     window.write_event_value("exit_app", "1")
 
 
 async def start_upload(chats, files, force_document=False):
     layout = [
         [
-            sg.Text("Filename", font=font, size=50),
-            sg.Text("Channel/Chat", font=font),
+            Text("Filename"),
+            Text("Channel/Chat"),
         ]
     ]
 
@@ -173,44 +131,26 @@ async def start_upload(chats, files, force_document=False):
             layout.extend(
                 [
                     [
-                        sg.Text(get_filename(file), font=font),
-                        sg.Text("->"),
-                        sg.Text(chat, font=font),
+                        Text(get_filename(file)),
+                        Text("->"),
+                        Text(chat),
                     ],
                     [
                         sg.ProgressBar(100, key=key, size=(50, 5), expand_x=True),
-                        sg.Text(f"----", key=f"{key}:text", font=font),
-                    ],
-                    [
-                        sg.T("                                    "),
+                        Text(f"----", f"{key}:text"),
                     ],
                 ]
             )
             files_to_upload.append((chat, file))
     layout = [
-        [
-            sg.Column(
-                layout,
-                scrollable=True,
-                vertical_scroll_only=True,
-                expand_x=True,
-                expand_y=True,
-                size=(800, 600),
-            )
-        ]
+        [Column(layout)],
     ]
-    window = sg.Window("Uploading...", layout=layout, resizable=True, finalize=True)
-    window.bind("<Configure>", "Event")
+    window = Window("Uploading...", layout)
+    # window.bind("<Configure>", "Event")
     await client.disconnect()
 
-    upload_thread = threading.Thread(
-        target=create_async_tasks,
-        args=(
-            window,
-            files_to_upload,
-            force_document,
-        ),
-        daemon=True,
+    upload_thread = create_thread(
+        create_async_tasks, window, files_to_upload, force_document
     )
     upload_thread.start()
 

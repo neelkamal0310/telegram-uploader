@@ -1,4 +1,6 @@
+import asyncio
 import os
+import threading
 
 import PySimpleGUI as sg
 
@@ -12,42 +14,34 @@ def get_filename(path, trim_ext=False):
     return filename[0] if trim_ext else basename
 
 
-def get_key(string, prefix="", suffix=""):
-    result = string
-    if suffix:
-        result = f"{result}:{suffix}"
-    if prefix:
-        result = f"{prefix}:{result}"
-    return result
+async def get_chats(client):
+    """
+    Return list of chats available to the client.
+    """
+
+    chats = []
+    async for dialog in client.iter_dialogs():
+        if dialog.name:
+            chats.append(dialog.name)
+    chats.sort()
+    return chats
 
 
-def create_checkbox_frame(
-    items,
-    key_prefix,
-    select_all=True,
-):
-    layout = []
-    if select_all:
-        layout.append(
-            [
-                Checkbox(
-                    "Select all",
-                    get_key("select_all", key_prefix),
-                )
-            ]
-        )
-    for item in items:
-        element = [sg.Checkbox(item, key=get_key(item, key_prefix), font=font)]
-        layout.append(element)
-    return Column(layout)
+def create_thread(func, *args, **kwargs):
+    return threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
 
 
-def create_text_frame(
-    items,
-):
-    layout = []
-    for item in items:
-        item_name = item.replace("/home/neel", "~")
-        element = [Text(item_name)]
-        layout.append(element)
-    return Column(layout)
+def threaded(func):
+    # A decorator that runs the function as threaded. It also creates a eventloop for asyncio operations
+    def wrapper(func, *args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        def run_thread():
+            # result = func(*args, **kwargs)
+            loop.run_until_complete(func(*args, **kwargs))
+
+        thread = threading.Thread(target=run_thread, daemon=True)
+        thread.start()
+
+    return wrapper
