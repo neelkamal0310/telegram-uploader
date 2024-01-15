@@ -10,7 +10,7 @@ from config import font
 from creds import api_hash, api_id, session_path
 from ui import Button, Checkbox, Spacer, Window
 from ui.base import CheckboxList, Column, Text, TextList, VCenter, VTop
-from utils import create_thread, get_chats, get_filename, threaded
+from utils import create_thread, get_chats, get_filename, run_async_concurrent, threaded
 
 client = TelegramClient(
     session_path,
@@ -57,14 +57,10 @@ async def main():
             upload_to_chats = [chat for chat in chats if values[f"chat:{chat}"]]
             as_document = values["send_as_document"]
             window.close()
+            await show_upload_window(upload_to_chats, files, as_document)
             break
         if event == sg.WIN_CLOSED or event == "cancel":
             break
-
-    if upload_to_chats is None or as_document is None:
-        return
-
-    await start_upload(upload_to_chats, files, as_document)
 
 
 async def upload_handler(client, window, chat, file, force_document):
@@ -76,8 +72,7 @@ async def upload_handler(client, window, chat, file, force_document):
     await client.send_file(
         chat,
         file,
-        # caption=get_filename(file, trim_ext=True),
-        # caption=get_filename(file, trim_ext=True),
+        caption=get_filename(file, trim_ext=True),
         force_document=force_document,
         progress_callback=report_status,
         silent=True,
@@ -93,23 +88,23 @@ async def start_uploading(window, files_to_upload, force_document=False):
     )
     await client.start()
 
-    semaphore = asyncio.Semaphore(12)
+    tasks = [
+        upload_handler(
+            client,
+            window,
+            chat,
+            file,
+            force_document,
+        )
+        for chat, file in files_to_upload
+    ]
 
-    async def upload_with_semaphore(chat, file):
-        async with semaphore:
-            await upload_handler(client, window, chat, file, force_document)
-
-    tasks = [upload_with_semaphore(chat, file) for chat, file in files_to_upload]
-
-    # for chat, file in files_to_upload:
-    #     task = upload_handler(client, window, chat, file, force_document)
-    #     tasks.append(task)
-    await asyncio.gather(*tasks)
+    await run_async_concurrent(*tasks, max=8)
     await client.disconnect()
     window.write_event_value("exit_app", "1")
 
 
-async def start_upload(chats, files, force_document=False):
+async def show_upload_window(chats, files, force_document=False):
     layout = [
         [
             Text("Filename"),
