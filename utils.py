@@ -3,11 +3,6 @@ import inspect
 import os
 import threading
 
-import PySimpleGUI as sg
-
-from config import font
-from ui import Checkbox, Column, Text
-
 
 def get_filename(path, trim_ext=False):
     basename = os.path.basename(path)

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import uuid
-from turtle import clear
 
 from telethon import TelegramClient
 

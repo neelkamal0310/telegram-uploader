@@ -1,50 +1,28 @@
 import asyncio
 import os
 import sys
-import threading
 
 import PySimpleGUI as sg
 from telethon import TelegramClient
 
-from config import font
 from creds import api_hash, api_id, session_path
 from ui import Button, Checkbox, Spacer, Window
-from ui.base import CheckboxList, Column, Text, TextList, VCenter, VTop
-from utils import create_thread, get_chats, get_filename, run_async_concurrent, threaded
+from ui.base import CheckboxList, Column, Text, TextList
+from utils import get_chats, get_filename, run_async_concurrent, threaded
 
-client = TelegramClient(
-    session_path,
-    api_id,
-    api_hash,
-)
+client = TelegramClient(session_path, api_id, api_hash)
 
 
 async def main():
+    await client.start()
     chats = await get_chats(client)
     files = sys.argv[1:]
-    selected_files = []
-    for file in files:
-        if not os.path.exists(file):
-            continue
-        selected_files.append(file)
-    files = selected_files
+    files = [path for path in files if os.path.isfile(path)]
 
     layout = [
-        [
-            CheckboxList(chats, "chat"),
-            TextList(files, "file"),
-        ],
-        [
-            Spacer(),
-            Checkbox("Send as document", "send_as_document"),
-            Spacer(),
-        ],
-        [
-            Spacer(),
-            Button("Start Upload", "upload"),
-            Button("Cancel", "cancel"),
-            Spacer(),
-        ],
+        [CheckboxList(chats, "chat"), TextList(files, "file")],
+        [Spacer(), Checkbox("Send as document", "send_as_document"), Spacer()],
+        [Spacer(), Button("Start Upload", "upload"), Button("Cancel", "cancel"), Spacer()],
     ]
 
     window = Window("Telegram Uploader - Upload to channel", layout)
@@ -57,13 +35,14 @@ async def main():
             upload_to_chats = [chat for chat in chats if values[f"chat:{chat}"]]
             as_document = values["send_as_document"]
             window.close()
+            await client.disconnect()
             await show_upload_window(upload_to_chats, files, as_document)
             break
         if event == sg.WIN_CLOSED or event == "cancel":
             break
 
 
-async def upload_handler(client, window, chat, file, force_document):
+async def create_upload_task(client, window, chat, file, force_document):
     def report_status(sent, total):
         key = f"{file}:{chat}:progress"
         percentage = (sent / total) * 100
@@ -80,36 +59,27 @@ async def upload_handler(client, window, chat, file, force_document):
 
 
 @threaded
-async def start_uploading(window, files_to_upload, force_document=False):
-    client = TelegramClient(
-        session_path,
-        api_id,
-        api_hash,
-    )
+async def start_upload(window, files_to_upload, force_document=False):
+    # client needs to be redeclared here since code in this block is threaded
+    # and running in different loop
+    client = TelegramClient(session_path, api_id, api_hash)
     await client.start()
 
     tasks = [
-        upload_handler(
-            client,
-            window,
-            chat,
-            file,
-            force_document,
-        )
+        create_upload_task(client, window, chat, file, force_document)
         for chat, file in files_to_upload
     ]
 
-    await run_async_concurrent(*tasks, max=8)
+    await run_async_concurrent(*tasks, max=16)
     await client.disconnect()
     window.write_event_value("exit_app", "1")
 
 
 async def show_upload_window(chats, files, force_document=False):
+    client = TelegramClient(session_path, api_id, api_hash)
+    await client.start()
     layout = [
-        [
-            Text("Filename"),
-            Text("Channel/Chat"),
-        ]
+        [Text("Filename"), Text("Channel/Chat")],
     ]
 
     files_to_upload = []
@@ -118,14 +88,10 @@ async def show_upload_window(chats, files, force_document=False):
             key = f"{file}:{chat}:progress"
             layout.extend(
                 [
-                    [
-                        Text(get_filename(file)),
-                        Text("->"),
-                        Text(chat),
-                    ],
+                    [Text(get_filename(file)), Text("->"), Text(chat)],
                     [
                         sg.ProgressBar(100, key=key, size=(50, 5), expand_x=True),
-                        Text(f"----", f"{key}:text"),
+                        Text("----", f"{key}:text"),
                     ],
                 ]
             )
@@ -134,24 +100,20 @@ async def show_upload_window(chats, files, force_document=False):
         [Column(layout)],
     ]
     window = Window("Uploading...", layout)
-    # window.bind("<Configure>", "Event")
+    window.read(False)
+    window.move_to_center()
     await client.disconnect()
 
-    start_uploading(window, files_to_upload, force_document)
+    start_upload(window, files_to_upload, force_document)
 
     while True:
         event, values = window.read()
         if event and event.endswith("progress"):
             window[event].update(values[event])
             window[f"{event}:text"].update(f"{int(values[event])}%")
-        if (
-            event == "exit_app"
-            or event == sg.WIN_CLOSED
-            or event == "Cancel"
-            or event is None
-        ):
+        if event == "exit_app" or event == sg.WIN_CLOSED or event == "Cancel" or event is None:
             break
 
 
-with client:
-    client.loop.run_until_complete(main())
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
