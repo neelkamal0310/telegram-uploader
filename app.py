@@ -13,33 +13,43 @@ from utils import get_chats, get_filename, run_async_concurrent, threaded
 client = TelegramClient(session_path, api_id, api_hash)
 
 
-async def main():
-    await client.start()
-    chats = await get_chats(client)
-    files = sys.argv[1:]
-    files = [path for path in files if os.path.isfile(path)]
+class ChatSelectionWindow:
+    def __init__(self, chats, files) -> None:
+        self.client = TelegramClient(session_path, api_id, api_hash)
+        self.layout = [
+            [CheckboxList(chats, "chat"), TextList(files, "file")],
+            [Spacer(), Checkbox("Send as document", "send_as_document"), Spacer()],
+            [Spacer(), Button("Start Upload", "upload"), Button("Cancel", "cancel"), Spacer()],
+        ]
+        self.window = Window("Telegram Uploader", self.layout)
 
-    layout = [
-        [CheckboxList(chats, "chat"), TextList(files, "file")],
-        [Spacer(), Checkbox("Send as document", "send_as_document"), Spacer()],
-        [Spacer(), Button("Start Upload", "upload"), Button("Cancel", "cancel"), Spacer()],
-    ]
+    async def run(self):
+        await client.start()
+        chats = await get_chats(client)
+        files = sys.argv[1:]
+        files = [path for path in files if os.path.isfile(path)]
 
-    window = Window("Telegram Uploader - Upload to channel", layout)
-    upload_to_chats = None
-    as_document = None
+        layout = [
+            [CheckboxList(chats, "chat"), TextList(files, "file")],
+            [Spacer(), Checkbox("Send as document", "send_as_document"), Spacer()],
+            [Spacer(), Button("Start Upload", "upload"), Button("Cancel", "cancel"), Spacer()],
+        ]
 
-    while True:
-        event, values = window.read()
-        if event == "upload":
-            upload_to_chats = [chat for chat in chats if values[f"chat:{chat}"]]
-            as_document = values["send_as_document"]
-            window.close()
-            await client.disconnect()
-            await show_upload_window(upload_to_chats, files, as_document)
-            break
-        if event == sg.WIN_CLOSED or event == "cancel":
-            break
+        window = Window("Telegram Uploader - Upload to channel", layout)
+        upload_to_chats = None
+        as_document = None
+
+        while True:
+            event, values = window.read()
+            if event == "upload":
+                upload_to_chats = [chat for chat in chats if values[f"chat:{chat}"]]
+                as_document = values["send_as_document"]
+                window.close()
+                await client.disconnect()
+                await show_upload_window(upload_to_chats, files, as_document)
+                break
+            if event == sg.WIN_CLOSED or event == "cancel":
+                break
 
 
 async def create_upload_task(client, window, chat, file, force_document):
@@ -113,6 +123,16 @@ async def show_upload_window(chats, files, force_document=False):
             window[f"{event}:text"].update(f"{int(values[event])}%")
         if event == "exit_app" or event == sg.WIN_CLOSED or event == "Cancel" or event is None:
             break
+
+
+async def main():
+    await client.start()
+    chats = await get_chats(client)
+    await client.disconnect()
+    files = sys.argv[1:]
+    files = [path for path in files if os.path.isfile(path)]
+    window = ChatSelectionWindow(chats, files)
+    await window.run()
 
 
 if __name__ == "__main__":

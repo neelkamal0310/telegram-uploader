@@ -3,6 +3,8 @@ import inspect
 import os
 import threading
 
+from telethon import TelegramClient
+
 
 def get_filename(path, trim_ext=False):
     basename = os.path.basename(path)
